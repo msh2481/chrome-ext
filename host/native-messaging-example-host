@@ -1,0 +1,57 @@
+#!/usr/bin/python3
+import json
+import struct
+import sys
+
+
+# On Windows, the default I/O mode is O_TEXT. Set this to O_BINARY
+# to avoid unwanted modifications of the input/output streams.
+if sys.platform == "win32":
+    import msvcrt, os
+
+    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+
+LOG_FILE = "/tmp/nm.log"
+
+
+def log(message):
+    with open(LOG_FILE, "a") as f:
+        f.write(message + "\n")
+        f.flush()
+
+
+# Helper function that sends a message to the webapp.
+def send_message(message):
+    log(f"Sending message: {message}")
+    # Write message size.
+    sys.stdout.buffer.write(struct.pack("I", len(message)))
+    # Write the message itself.
+    sys.stdout.write(message)
+    sys.stdout.flush()
+
+
+# Thread that reads messages from the webapp.
+def read_thread_func():
+    while 1:
+        log("Still running")
+        # Read the message length (first 4 bytes).
+        text_length_bytes = sys.stdin.buffer.read(4)
+        log(f"Received message length: {text_length_bytes}")
+        if len(text_length_bytes) == 0:
+            sys.exit(0)
+        # Unpack message length as 4 byte integer.
+        text_length = struct.unpack("@I", text_length_bytes)[0]
+        # Read the text (JSON object) of the message.
+        text = sys.stdin.buffer.read(text_length).decode("utf-8")
+        log(f"Received message: {text}")
+        msg = {"text": f"len = {len(text)}"}
+        send_message(json.dumps(msg))
+
+
+if __name__ == "__main__":
+    with open(LOG_FILE, "w") as f:
+        f.write("")
+        f.flush()
+    send_message('{"text": "hello"}')
+    read_thread_func()
